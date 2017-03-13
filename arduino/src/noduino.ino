@@ -3,12 +3,12 @@
  *
  */
 #include <Arduino.h>
-#include <DHT.h>
 
 
 #define BEGIN   '#'
 #define END     '.'
 
+uint8_t commandId   = 0;
 uint8_t cmdBuffer[10];
 int  length   = 0;
 bool enabled  = false;
@@ -24,10 +24,8 @@ enum Command:uint8_t {
 };
 
 enum Response:uint8_t {
-  ERROR         = 0x01,
-  SUCCESS       = 0x02,
-  DIGITAL_VALUE = 0x12,
-  ANALOG_VALUE  = 0x22
+  R_ERROR         = 0x00,
+  R_SUCCESS       = 0x01
 };
 
 enum PinMode:uint8_t {
@@ -46,6 +44,7 @@ void loop() {
     if (caracter == BEGIN)
     {
       int i = 0;
+      commandId = (uint8_t) Serial.read();
       while (Serial.available() > 0 && caracter != END) {
         caracter = (uint8_t) Serial.read();
         if (caracter != END){
@@ -62,7 +61,7 @@ void loop() {
     }
   }
 
-  delay(500);
+  delay(50);
 }
 
 void execute() {
@@ -89,37 +88,37 @@ void execute() {
     break;
     default:
       // TODO : Error Msg
-      error();
     break;
   }
 }
 
 void _enable() {
+  uint8_t value = cmdBuffer[1];
+
   if (length != 2)
   {
-    error();
+    //enableResponse(R_ERROR, value);
     return;
   }
 
-  uint8_t value = cmdBuffer[1];
   if (value == 0x00) {
     enabled = false;
   }
   else {
     enabled = true;
   }
-  success();
+  enableResponse(R_SUCCESS, value);
 }
 
 void _setPinMode() {
-  if (length != 3)
-  {
-    error();
-    return;
-  }
-
   uint8_t number  = cmdBuffer[1];
   uint8_t value   = cmdBuffer[2];
+
+  if (length != 3)
+  {
+    //pinModeResponse(R_ERROR, number, value);
+    return;
+  }
 
   switch (value) {
     case DIGITAL_OUTPUT:
@@ -129,35 +128,36 @@ void _setPinMode() {
       pinMode(number, INPUT);
     break;
     default:
-      error();
+      pinModeResponse(R_ERROR, number, value);
       return;
     break;
   }
-  success();
+  pinModeResponse(R_SUCCESS, number, value);
 }
 
 void _digitalRead() {
-  if (length != 2)
-  {
-    error();
-    return;
-  }
 
   uint8_t number  = cmdBuffer[1];
   uint8_t value   = digitalRead(number);
 
-  digitalValue(value);
-}
-
-void _digitalWrite() {
-  if (length != 3)
+  if (length != 2)
   {
-    error();
+    //digitalReadResponse(R_ERROR, number, value);
     return;
   }
 
+  digitalReadResponse(R_SUCCESS, number, value);
+}
+
+void _digitalWrite() {
   uint8_t number  = cmdBuffer[1];
   uint8_t value   = cmdBuffer[2];
+
+  if (length != 3)
+  {
+    //digitalWriteResponse(R_ERROR, number, value);
+    return;
+  }
 
   if (value == 0x00) {
     digitalWrite(number, LOW);
@@ -165,60 +165,71 @@ void _digitalWrite() {
   else {
     digitalWrite(number, HIGH);
   }
-  success();
+  digitalWriteResponse(R_SUCCESS, number, value);
 }
 
 void _analogRead() {
+  uint8_t number  = cmdBuffer[1];
+  int value       = analogRead(number);
+
   if (length != 2)
   {
-    error();
+    //analogReadResponse(R_ERROR, number, value);
     return;
   }
 
-  uint8_t number  = cmdBuffer[1];
-  int value       = analogRead(number);
-  analogValue(16);
+  analogReadResponse(R_SUCCESS, number, value);
 }
 
 void _analogWrite() {
-  if (length != 6)
-  {
-    error();
-    return;
-  }
-
   uint8_t number  = cmdBuffer[1];
   int value       = charsToInt(cmdBuffer+2);
 
-  analogWrite(number, value)
+  if (length != 6)
+  {
+    //analogWriteResponse(R_ERROR, number, value);
+    return;
+  }
 
-  success();
+  analogWrite(number, value);
+
+  analogWriteResponse(R_SUCCESS, number, value);
 }
 
-void success() {
-  String output = "#";
-  output = output +  (char) SUCCESS;
-  output = output +  END;
-  Serial.print(output);
-}
+void enableResponse(uint8_t response, uint8_t value) {
+  char output[6];
 
-void error() {
-  String output = "#";
-  output = output +  (char) ERROR;
-  output = output +  END;
-  Serial.print(output);
-}
-
-void digitalValue(uint8_t value) {
-  char output[4];
-
-  sprintf(output, "%c%c%c%c", BEGIN, ANALOG_VALUE, value, END);
+  sprintf(output, "%c%c%c%c%c%c", BEGIN, commandId, response, ENABLE, value, END);
 
   Serial.write(output , sizeof(output));
 }
 
-void analogValue(int value) {
+void pinModeResponse(uint8_t response, uint8_t number, uint8_t value) {
   char output[7];
+
+  sprintf(output, "%c%c%c%c%c%c%c", BEGIN, commandId, response, PIN_MODE, number, value, END);
+
+  Serial.write(output , sizeof(output));
+}
+
+void digitalWriteResponse(uint8_t response, uint8_t number, uint8_t value) {
+  char output[7];
+
+  sprintf(output, "%c%c%c%c%c%c%c", BEGIN, commandId, response, DIGITAL_WRITE, number, value, END);
+
+  Serial.write(output , sizeof(output));
+}
+
+void digitalReadResponse(uint8_t response, uint8_t number, uint8_t value) {
+  char output[7];
+
+  sprintf(output, "%c%c%c%c%c%c%c", BEGIN, commandId, response, DIGITAL_READ, number, value, END);
+
+  Serial.write(output , sizeof(output));
+}
+
+void analogWriteResponse(uint8_t response, uint8_t number, int value) {
+  char output[10];
 
   char buffer[4];
 
@@ -227,7 +238,22 @@ void analogValue(int value) {
   buffer[1] = (value >> 16) & 0xFF;
   buffer[0] = (value >> 24) & 0xFF;
 
-  sprintf(output, "%c%c%c%c%c%c%c", BEGIN, ANALOG_VALUE, buffer[0], buffer[1], buffer[2], buffer[3], END);
+  sprintf(output, "%c%c%c%c%c%c%c%c%c%c", BEGIN, commandId, response, ANALOG_WRITE, number, buffer[0], buffer[1], buffer[2], buffer[3], END);
+
+  Serial.write(output , sizeof(output));
+}
+
+void analogReadResponse(uint8_t response, uint8_t number, int value) {
+  char output[10];
+
+  char buffer[4];
+
+  buffer[3] = value & 0xFF;
+  buffer[2] = (value >> 8) & 0xFF;
+  buffer[1] = (value >> 16) & 0xFF;
+  buffer[0] = (value >> 24) & 0xFF;
+
+  sprintf(output, "%c%c%c%c%c%c%c%c%c%c", BEGIN, commandId, response, ANALOG_READ, number, buffer[0], buffer[1], buffer[2], buffer[3], END);
 
   Serial.write(output , sizeof(output));
 }
