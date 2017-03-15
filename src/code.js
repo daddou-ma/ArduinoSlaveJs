@@ -19,6 +19,11 @@ module.exports = {
         analogRead  : 0x22,
         analogWrite : 0x23
     },
+    type: {
+        digital : 0x01,
+        analog  : 0x02,
+        dht     : 0x03
+    },
     pinMode: {
         digitalOutput   : 0x01,
         digitalInput    : 0x02

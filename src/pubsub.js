@@ -9,12 +9,12 @@ class PubSub {
         this.events[event].push(callback)
     }
     
-    emit(event, data) {
+    emit(event, ...data) {
         if (this.events[event] == undefined) {
             return
         }
         this.events[event].forEach((callback) => {
-            callback(data)
+            callback(...data)
         })
     }
 }

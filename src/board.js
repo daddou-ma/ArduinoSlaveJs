@@ -1,59 +1,71 @@
+"use strict";
+
 let SerialPort  = require('serialport')
 let PubSub      = require('./pubsub')
 let Code        = require('./code')
 let BoardHelper = require('./board.helper')
+let Pin         = require('./pin')
+
 
 let Delimiter = SerialPort.parsers.byteDelimiter;
 
 
 class Board {
-    constructor(arduino) {
+    constructor(arduino, channel) {
         this._serialNumber   = arduino.serialNumber
         this._port           = arduino.comName
         this._pins           = []
-        this._pubsub         = new PubSub()
+        this._channel        = channel
         
         this._serial = new SerialPort(this._port, {
             parser: SerialPort.parsers.byteDelimiter([0x23, 0x2E])
         })
-        this._serial.on('disconnect', this.disconnect.bind(this))
-        this._serial.on('error', this.disconnect.bind(this))
         
         this.initDataListener()
         
+        for (let i = 2; i < 14; i++) {
+            this.addPin(new Pin(this, i, Code.type.analog))
+        }
+        
+        this._channel.emit('connect', this)
+        
+        this._serial.on('disconnect', this.disconnect.bind(this))
+        this._serial.on('error', this.disconnect.bind(this))
+        
+        let p = true
         setTimeout((() => {
             this.enable()
             
+            this.getPin(13).pinMode(Code.pinMode.digitalOutput)
             setInterval((() => {
-                this.analogWrite(0xA1, 0x101)
+                p = !p
+                this.getPin(13).digitalWrite(p)
             }).bind(this), 1000)
 
         }).bind(this), 3000)
-            
+    }
+    
+    write(data) {
+        this._serial.write(data)
     }
     
     enable() {
-        this._serial.write([Code.Begin, 0x00, Code.Command.enable, 0x01, Code.End])
+        this.write([Code.Begin, 0x00, Code.Command.enable, 0x01, Code.End])
     }
     
-    pinMode(number, type) {
-        this._serial.write([Code.Begin, 0x00, Code.Command.pinMode, number, type, Code.End])
+    addPin(pin) {
+        if (this._pins[pin._number] != undefined)
+        {
+            throw new Error('Pin Already defined')
+        }
+        this._pins[pin._number] = pin
     }
     
-    digitalWrite(number, value) {
-        this._serial.write([Code.Begin, 0x00, Code.Command.digitalWrite, number, value, Code.End])
-    }
-    
-    digitalRead(number) {
-        this._serial.write([Code.Begin, 0x00, Code.Command.digitalRead, number, Code.End])
-    }
-    
-    analogWrite(number, value) {
-        this._serial.write([Code.Begin, 0x00, Code.Command.analogWrite, number, ...BoardHelper.intToBytes(value), Code.End])
-    }
-    
-    analogRead(number) {
-        this._serial.write([Code.Begin, 0x00, Code.Command.analogRead, number, Code.End])
+    getPin(number) {
+        if (this._pins[number] == undefined) {
+            throw new Error('Undefined Pin')
+        }
+        return this._pins[number]
     }
     
     initDataListener() {
@@ -63,25 +75,27 @@ class Board {
             }))
             
             // TODO : i will see if we have to handle error here !
+                        
+            if (response && response.command == Code.Command.enable) {
+                this.emit('enabled', this, response)
+            }
             
-            console.log(data)
-            
-            /*if (response && response.pin) {
-                this._pins[pin].emit('data', response)
-            }*/
+            else if (response && response.pin && this._pins[response.pin]) {
+                this._pins[response.pin].emit('data', response)
+            }
         })
     }
     
     on(event, callback) {
-        this._pubsub.on(event, callback)
+        this._channel.on(event, callback)
     }
     
-    emit(event, data) {
-        this._pubsub.emit(event, data)
+    emit(event, ...data) {
+        this._channel.emit(event, ...data)
     }
     
     disconnect(data) {
-        this._pubsub.emit('disconnect', data)
+        this._channel.emit('disconnect', this)
     }
 }
 

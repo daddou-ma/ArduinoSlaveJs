@@ -73,10 +73,10 @@ const intToBytes = (num) => {
 
 const bytesToInt = (array) => {
     return (
-        (array[3] << 24) |
-        (array[2] << 16) |
-        (array[1] << 8) |
-        array[0] & 255
+        (array[0] << 24) |
+        (array[1] << 16) |
+        (array[2] << 8) |
+        array[3] & 255
     )
 }
 

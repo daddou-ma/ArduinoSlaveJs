@@ -1,5 +1,5 @@
 {
-  "name": "noduino",
+  "name": "arduino-slave-js",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -12,12 +12,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Mohamed-El-Amine-D/Noduino.git"
+    "url": "git+https://github.com/daddou-ma/ArduinoSlaveJs.git"
   },
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
-    "url": "https://github.com/Mohamed-El-Amine-D/Noduino/issues"
+    "url": "https://github.com/daddou-ma/ArduinoSlaveJs/issues"
   },
-  "homepage": "https://github.com/Mohamed-El-Amine-D/Noduino#readme"
+  "homepage": "https://github.com/daddou-ma/ArduinoSlaveJs#readme"
 }
